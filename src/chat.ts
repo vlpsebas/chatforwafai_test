@@ -31,11 +31,13 @@ export async function handleChatRequest(
         });
 
         // Parse DLP verdict from gateway response header
-        const dlp = parseDLPHeader(aiResponse.headers.get("cf-aig-dlp"));
+        const rawDlpHeader = aiResponse.headers.get("cf-aig-dlp");
+        const dlp = parseDLPHeader(rawDlpHeader);
         const logEntry = buildLogEntry(lastUserMsg?.content ?? "", dlp);
 
         // Log to D1 in the background -- zero latency impact on user
-        ctx.waitUntil(logDLPEvent(env.DB, logEntry));
+        const rawDlpHeader = aiResponse.headers.get("cf-aig-dlp");
+        ctx.waitUntil(logDLPEvent(env.DB, logEntry, rawDlpHeader));
 
         // If gateway blocked the request, forward the error
         if (!aiResponse.ok) {

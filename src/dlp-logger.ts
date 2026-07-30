@@ -63,11 +63,11 @@ export function buildLogEntry(userMessage: string, dlp: DLPResult | null): DLPLo
  * Write a DLP log entry to D1
  * Call this inside ctx.waitUntil() so it doesn't block the response
  */
-export async function logDLPEvent(db: D1Database, entry: DLPLogEntry): Promise<void> {
+export async function logDLPEvent(db: D1Database, entry: DLPLogEntry, rawHeader: string | null): Promise<void> {
     await db.prepare(
         `INSERT INTO chat_dlp_logs 
-         (user_message, dlp_action, dlp_findings, dlp_check, blocked, timestamp) 
-         VALUES (?, ?, ?, ?, ?, ?)`
+         (user_message, dlp_action, dlp_findings, dlp_check, blocked, timestamp, raw_dlp_header) 
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
     ).bind(
         entry.userMessage,
         entry.dlpAction,
@@ -75,6 +75,7 @@ export async function logDLPEvent(db: D1Database, entry: DLPLogEntry): Promise<v
         entry.dlpCheck,
         entry.blocked ? 1 : 0,
         entry.timestamp,
+        rawHeader,
     ).run();
 }
 
