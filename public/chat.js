@@ -13,21 +13,21 @@ const typingIndicator = document.getElementById("typing-indicator");
 // Cache control elements (added dynamically)
 let cacheControls = null;
 function initCacheControls() {
-	const inputArea = document.querySelector(".input-area");
+	const inputArea = document.querySelector(".message-input");
 	if (!inputArea || cacheControls) return;
 
 	cacheControls = document.createElement("div");
 	cacheControls.id = "cache-controls";
 	cacheControls.innerHTML = `
-		<div style="display:flex; gap:12px; padding:8px 16px; background:#1a1a2e; border-top:1px solid #333; font-size:12px; color:#aaa; align-items:center; flex-wrap:wrap;">
+		<div style="display:flex; gap:12px; padding:8px 16px; background:#f3f4f6; border-top:1px solid #e5e7eb; font-size:12px; color:#6b7280; align-items:center; flex-wrap:wrap;">
 			<label style="display:flex;align-items:center;gap:4px;">
 				<input type="checkbox" id="skip-cache"> Skip Cache
 			</label>
 			<label style="display:flex;align-items:center;gap:4px;">
-				TTL: <input type="number" id="cache-ttl" placeholder="seconds" min="60" max="2592000" style="width:80px;background:#222;color:#fff;border:1px solid #444;border-radius:4px;padding:2px 6px;font-size:12px;">
+				TTL: <input type="number" id="cache-ttl" placeholder="seconds" min="60" max="2592000" style="width:80px;background:#fff;color:#1f2937;border:1px solid #d1d5db;border-radius:4px;padding:2px 6px;font-size:12px;">
 			</label>
 			<label style="display:flex;align-items:center;gap:4px;">
-				Cache Key: <input type="text" id="cache-key" placeholder="e.g. campaign-123" style="width:130px;background:#222;color:#fff;border:1px solid #444;border-radius:4px;padding:2px 6px;font-size:12px;">
+				Cache Key: <input type="text" id="cache-key" placeholder="e.g. campaign-123" style="width:130px;background:#fff;color:#1f2937;border:1px solid #d1d5db;border-radius:4px;padding:2px 6px;font-size:12px;">
 			</label>
 			<span id="cache-status-badge" style="margin-left:auto;padding:2px 8px;border-radius:4px;font-weight:bold;display:none;"></span>
 		</div>
