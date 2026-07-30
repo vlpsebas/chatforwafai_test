@@ -36,9 +36,6 @@ export async function handleChatRequest(
         const logEntry = buildLogEntry(lastUserMsg?.content ?? "", dlp);
 
         // Log to D1 in the background -- zero latency impact on user
-        const rawDlpHeader = aiResponse.headers.get("cf-aig-dlp");
-        ctx.waitUntil(logDLPEvent(env.DB, logEntry, rawDlpHeader));
-
         // If gateway blocked the request, forward the error
         if (!aiResponse.ok) {
             return new Response(aiResponse.body, {
