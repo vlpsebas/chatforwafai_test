@@ -37,11 +37,13 @@ export async function handleChatRequest(
         };
 
         // --- Server-side cache strategy ---
-        // If widget ID present, cache by widget (all users on same widget get same cache)
-        // Otherwise, cache by user message hash (same question = same cache)
+        // Cache key combines widget ID (if present) + message hash
+        // Same question = same cache, regardless of chat history
+        // Widget scopes the cache so different widgets don't share responses
+        const msgHash = simpleHash(userText);
         const cacheKey = widgetId
-            ? `widget-${widgetId}`
-            : `chat-${simpleHash(userText)}`;
+            ? `widget-${widgetId}-${msgHash}`
+            : `chat-${msgHash}`;
 
         gatewayHeaders["cf-aig-cache-key"] = cacheKey;
         gatewayHeaders["cf-aig-cache-ttl"] = String(DEFAULT_CACHE_TTL);
@@ -69,20 +71,18 @@ export async function handleChatRequest(
         if (!aiResponse.ok) {
             return new Response(aiResponse.body, {
                 status: aiResponse.status,
-                headers: {
-                    "content-type": "application/json",
-                    "x-cache-status": cacheStatus,
-                },
+                headers: { "content-type": "application/json" },
             });
         }
 
-        // Stream response to client with cache status header
+        // Stream response to client
+        // Cache status is NOT exposed to the client (security: prevents cache probing)
+        // Visible only in AI Gateway dashboard and D1 audit logs
         return new Response(aiResponse.body, {
             headers: {
                 "content-type": "text/event-stream; charset=utf-8",
                 "cache-control": "no-cache",
                 "connection": "keep-alive",
-                "x-cache-status": cacheStatus,
             },
         });
     } catch (error) {

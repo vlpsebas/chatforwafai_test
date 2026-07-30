@@ -10,35 +10,7 @@ const userInput = document.getElementById("user-input");
 const sendButton = document.getElementById("send-button");
 const typingIndicator = document.getElementById("typing-indicator");
 
-// Cache status badge (shown after each response)
-function initCacheBadge() {
-	const container = document.querySelector(".chat-container");
-	if (!container || document.getElementById("cache-status-badge")) return;
-	const badge = document.createElement("div");
-	badge.id = "cache-status-badge";
-	badge.style.cssText = "display:none; padding:4px 12px; font-size:12px; font-weight:bold; text-align:center; border-top:1px solid #e5e7eb;";
-	container.appendChild(badge);
-}
 
-function showCacheStatus(status) {
-	const badge = document.getElementById("cache-status-badge");
-	if (!badge) return;
-	badge.style.display = "block";
-	badge.textContent = `Cache: ${status}`;
-	if (status === "HIT") {
-		badge.style.background = "#dcfce7";
-		badge.style.color = "#166534";
-	} else if (status === "MISS") {
-		badge.style.background = "#fef2f2";
-		badge.style.color = "#991b1b";
-	} else {
-		badge.style.background = "#f3f4f6";
-		badge.style.color = "#6b7280";
-	}
-}
-
-document.addEventListener("DOMContentLoaded", initCacheBadge);
-initCacheBadge();
 
 // Chat state
 let chatHistory = [
@@ -124,10 +96,6 @@ async function sendMessage() {
 				messages: chatHistory,
 			}),
 		});
-
-		// Show cache status from response header
-		const cacheStatus = response.headers.get("x-cache-status") || "NONE";
-		showCacheStatus(cacheStatus);
 
 		// Handle errors
 		if (!response.ok) {
