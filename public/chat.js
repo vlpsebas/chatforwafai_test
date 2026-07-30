@@ -10,63 +10,35 @@ const userInput = document.getElementById("user-input");
 const sendButton = document.getElementById("send-button");
 const typingIndicator = document.getElementById("typing-indicator");
 
-// Cache control elements (added dynamically)
-let cacheControls = null;
-function initCacheControls() {
-	const inputArea = document.querySelector(".message-input");
-	if (!inputArea || cacheControls) return;
-
-	cacheControls = document.createElement("div");
-	cacheControls.id = "cache-controls";
-	cacheControls.innerHTML = `
-		<div style="display:flex; gap:12px; padding:8px 16px; background:#f3f4f6; border-top:1px solid #e5e7eb; font-size:12px; color:#6b7280; align-items:center; flex-wrap:wrap;">
-			<label style="display:flex;align-items:center;gap:4px;">
-				<input type="checkbox" id="skip-cache"> Skip Cache
-			</label>
-			<label style="display:flex;align-items:center;gap:4px;">
-				TTL: <input type="number" id="cache-ttl" placeholder="seconds" min="60" max="2592000" style="width:80px;background:#fff;color:#1f2937;border:1px solid #d1d5db;border-radius:4px;padding:2px 6px;font-size:12px;">
-			</label>
-			<label style="display:flex;align-items:center;gap:4px;">
-				Cache Key: <input type="text" id="cache-key" placeholder="e.g. campaign-123" style="width:130px;background:#fff;color:#1f2937;border:1px solid #d1d5db;border-radius:4px;padding:2px 6px;font-size:12px;">
-			</label>
-			<span id="cache-status-badge" style="margin-left:auto;padding:2px 8px;border-radius:4px;font-weight:bold;display:none;"></span>
-		</div>
-	`;
-	inputArea.parentNode.insertBefore(cacheControls, inputArea);
-}
-
-function getCacheOptions() {
-	const skipCache = document.getElementById("skip-cache")?.checked ?? false;
-	const ttlInput = document.getElementById("cache-ttl")?.value;
-	const cacheKey = document.getElementById("cache-key")?.value?.trim();
-	const options = {};
-	if (skipCache) options.skipCache = true;
-	if (ttlInput && Number(ttlInput) >= 60) options.cacheTtl = Number(ttlInput);
-	if (cacheKey) options.cacheKey = cacheKey;
-	return options;
+// Cache status badge (shown after each response)
+function initCacheBadge() {
+	const container = document.querySelector(".chat-container");
+	if (!container || document.getElementById("cache-status-badge")) return;
+	const badge = document.createElement("div");
+	badge.id = "cache-status-badge";
+	badge.style.cssText = "display:none; padding:4px 12px; font-size:12px; font-weight:bold; text-align:center; border-top:1px solid #e5e7eb;";
+	container.appendChild(badge);
 }
 
 function showCacheStatus(status) {
 	const badge = document.getElementById("cache-status-badge");
 	if (!badge) return;
-	badge.style.display = "inline-block";
+	badge.style.display = "block";
 	badge.textContent = `Cache: ${status}`;
 	if (status === "HIT") {
-		badge.style.background = "#22c55e";
-		badge.style.color = "#000";
+		badge.style.background = "#dcfce7";
+		badge.style.color = "#166534";
 	} else if (status === "MISS") {
-		badge.style.background = "#ef4444";
-		badge.style.color = "#fff";
+		badge.style.background = "#fef2f2";
+		badge.style.color = "#991b1b";
 	} else {
-		badge.style.background = "#666";
-		badge.style.color = "#fff";
+		badge.style.background = "#f3f4f6";
+		badge.style.color = "#6b7280";
 	}
 }
 
-// Initialize cache controls on load
-document.addEventListener("DOMContentLoaded", initCacheControls);
-// Also try immediately in case DOM is already ready
-initCacheControls();
+document.addEventListener("DOMContentLoaded", initCacheBadge);
+initCacheBadge();
 
 // Chat state
 let chatHistory = [
@@ -133,16 +105,23 @@ async function sendMessage() {
 		// Scroll to bottom
 		chatMessages.scrollTop = chatMessages.scrollHeight;
 
-		// Send request to API with cache options
-		const cacheOptions = getCacheOptions();
+		// Send request to API (cache is controlled server-side)
+		// Read widget ID from URL query param (e.g., ?widget=abc-123)
+		const urlParams = new URLSearchParams(window.location.search);
+		const widgetId = urlParams.get("widget");
+
+		const fetchHeaders = {
+			"Content-Type": "application/json",
+		};
+		if (widgetId) {
+			fetchHeaders["x-widget-id"] = widgetId;
+		}
+
 		const response = await fetch("/api/chat", {
 			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-			},
+			headers: fetchHeaders,
 			body: JSON.stringify({
 				messages: chatHistory,
-				cacheOptions,
 			}),
 		});
 

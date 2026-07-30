@@ -1,8 +1,11 @@
-import { ChatMessage, Env, CacheOptions } from "./types";
+import { ChatMessage, Env } from "./types";
 import { parseDLPHeader, buildLogEntry, logDLPEvent } from "./dlp-logger";
 
 const MODEL_ID = "@cf/meta/llama-3.1-8b-instruct-fp8";
 const SYSTEM_PROMPT = "You are a helpful, friendly assistant. Provide concise and accurate responses.";
+
+// Default cache TTL in seconds (5 minutes)
+const DEFAULT_CACHE_TTL = 300;
 
 export async function handleChatRequest(
     request: Request,
@@ -10,9 +13,8 @@ export async function handleChatRequest(
     ctx: ExecutionContext,
 ): Promise<Response> {
     try {
-        const { messages = [], cacheOptions = {} } = await request.json() as {
+        const { messages = [] } = await request.json() as {
             messages: ChatMessage[];
-            cacheOptions?: CacheOptions;
         };
 
         if (!messages.some((msg) => msg.role === "system")) {
@@ -20,30 +22,29 @@ export async function handleChatRequest(
         }
 
         const lastUserMsg = messages.filter(m => m.role === "user").pop();
+        const userText = lastUserMsg?.content ?? "";
+
+        // Read widget ID from request header (production) or forwarded from frontend
+        const widgetId = request.headers.get("x-widget-id") ?? null;
 
         // Use fetch() instead of env.AI.run() to get response headers
         const gatewayUrl = `https://gateway.ai.cloudflare.com/v1/${env.ACCOUNT_ID}/${env.GATEWAY_ID}/workers-ai/${MODEL_ID}`;
 
-        // Build gateway request headers with cache controls
+        // Build gateway request headers with server-side cache controls
         const gatewayHeaders: Record<string, string> = {
             "Authorization": `Bearer ${env.CF_API_TOKEN}`,
             "Content-Type": "application/json",
         };
 
-        // 2c: Per-request cache TTL
-        if (cacheOptions.cacheTtl) {
-            gatewayHeaders["cf-aig-cache-ttl"] = String(cacheOptions.cacheTtl);
-        }
+        // --- Server-side cache strategy ---
+        // If widget ID present, cache by widget (all users on same widget get same cache)
+        // Otherwise, cache by user message hash (same question = same cache)
+        const cacheKey = widgetId
+            ? `widget-${widgetId}`
+            : `chat-${simpleHash(userText)}`;
 
-        // 2d: Skip cache when freshness matters
-        if (cacheOptions.skipCache) {
-            gatewayHeaders["cf-aig-skip-cache"] = "true";
-        }
-
-        // 2e: Custom cache key (e.g., campaign ID, widget ID)
-        if (cacheOptions.cacheKey) {
-            gatewayHeaders["cf-aig-cache-key"] = cacheOptions.cacheKey;
-        }
+        gatewayHeaders["cf-aig-cache-key"] = cacheKey;
+        gatewayHeaders["cf-aig-cache-ttl"] = String(DEFAULT_CACHE_TTL);
 
         const aiResponse = await fetch(gatewayUrl, {
             method: "POST",
@@ -54,13 +55,15 @@ export async function handleChatRequest(
         // Parse DLP verdict from gateway response header
         const dlp = parseDLPHeader(aiResponse.headers.get("cf-aig-dlp"));
 
-        // 2b: Capture cache status from gateway response
+        // Capture cache status from gateway response
         const cacheStatus = aiResponse.headers.get("cf-aig-cache-status") ?? "NONE";
 
-        const logEntry = buildLogEntry(lastUserMsg?.content ?? "", dlp, cacheStatus, cacheOptions);
-
-        // Log to D1 in the background -- zero latency impact on user
-        ctx.waitUntil(logDLPEvent(env.DB, logEntry));
+        // Only log to D1 when DLP detects something (FLAG or BLOCK)
+        // Clean requests don't create audit entries
+        if (dlp) {
+            const logEntry = buildLogEntry(userText, dlp, cacheStatus, cacheKey, widgetId);
+            ctx.waitUntil(logDLPEvent(env.DB, logEntry));
+        }
 
         // If gateway blocked the request, forward the error
         if (!aiResponse.ok) {
@@ -73,8 +76,7 @@ export async function handleChatRequest(
             });
         }
 
-        // DLP passed or flagged -- stream response to client
-        // Include cache status in response header so frontend can display it
+        // Stream response to client with cache status header
         return new Response(aiResponse.body, {
             headers: {
                 "content-type": "text/event-stream; charset=utf-8",
@@ -90,4 +92,18 @@ export async function handleChatRequest(
             { status: 500, headers: { "content-type": "application/json" } },
         );
     }
+}
+
+/**
+ * Simple hash of a string for use as a cache key.
+ * Same question = same hash = cache hit, regardless of chat history.
+ */
+function simpleHash(str: string): string {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash).toString(36);
 }
