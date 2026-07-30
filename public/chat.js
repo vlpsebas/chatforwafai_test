@@ -10,6 +10,64 @@ const userInput = document.getElementById("user-input");
 const sendButton = document.getElementById("send-button");
 const typingIndicator = document.getElementById("typing-indicator");
 
+// Cache control elements (added dynamically)
+let cacheControls = null;
+function initCacheControls() {
+	const inputArea = document.querySelector(".input-area");
+	if (!inputArea || cacheControls) return;
+
+	cacheControls = document.createElement("div");
+	cacheControls.id = "cache-controls";
+	cacheControls.innerHTML = `
+		<div style="display:flex; gap:12px; padding:8px 16px; background:#1a1a2e; border-top:1px solid #333; font-size:12px; color:#aaa; align-items:center; flex-wrap:wrap;">
+			<label style="display:flex;align-items:center;gap:4px;">
+				<input type="checkbox" id="skip-cache"> Skip Cache
+			</label>
+			<label style="display:flex;align-items:center;gap:4px;">
+				TTL: <input type="number" id="cache-ttl" placeholder="seconds" min="60" max="2592000" style="width:80px;background:#222;color:#fff;border:1px solid #444;border-radius:4px;padding:2px 6px;font-size:12px;">
+			</label>
+			<label style="display:flex;align-items:center;gap:4px;">
+				Cache Key: <input type="text" id="cache-key" placeholder="e.g. campaign-123" style="width:130px;background:#222;color:#fff;border:1px solid #444;border-radius:4px;padding:2px 6px;font-size:12px;">
+			</label>
+			<span id="cache-status-badge" style="margin-left:auto;padding:2px 8px;border-radius:4px;font-weight:bold;display:none;"></span>
+		</div>
+	`;
+	inputArea.parentNode.insertBefore(cacheControls, inputArea);
+}
+
+function getCacheOptions() {
+	const skipCache = document.getElementById("skip-cache")?.checked ?? false;
+	const ttlInput = document.getElementById("cache-ttl")?.value;
+	const cacheKey = document.getElementById("cache-key")?.value?.trim();
+	const options = {};
+	if (skipCache) options.skipCache = true;
+	if (ttlInput && Number(ttlInput) >= 60) options.cacheTtl = Number(ttlInput);
+	if (cacheKey) options.cacheKey = cacheKey;
+	return options;
+}
+
+function showCacheStatus(status) {
+	const badge = document.getElementById("cache-status-badge");
+	if (!badge) return;
+	badge.style.display = "inline-block";
+	badge.textContent = `Cache: ${status}`;
+	if (status === "HIT") {
+		badge.style.background = "#22c55e";
+		badge.style.color = "#000";
+	} else if (status === "MISS") {
+		badge.style.background = "#ef4444";
+		badge.style.color = "#fff";
+	} else {
+		badge.style.background = "#666";
+		badge.style.color = "#fff";
+	}
+}
+
+// Initialize cache controls on load
+document.addEventListener("DOMContentLoaded", initCacheControls);
+// Also try immediately in case DOM is already ready
+initCacheControls();
+
 // Chat state
 let chatHistory = [
 	{
@@ -75,7 +133,8 @@ async function sendMessage() {
 		// Scroll to bottom
 		chatMessages.scrollTop = chatMessages.scrollHeight;
 
-		// Send request to API
+		// Send request to API with cache options
+		const cacheOptions = getCacheOptions();
 		const response = await fetch("/api/chat", {
 			method: "POST",
 			headers: {
@@ -83,8 +142,13 @@ async function sendMessage() {
 			},
 			body: JSON.stringify({
 				messages: chatHistory,
+				cacheOptions,
 			}),
 		});
+
+		// Show cache status from response header
+		const cacheStatus = response.headers.get("x-cache-status") || "NONE";
+		showCacheStatus(cacheStatus);
 
 		// Handle errors
 		if (!response.ok) {

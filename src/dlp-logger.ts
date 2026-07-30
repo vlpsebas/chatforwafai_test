@@ -137,6 +137,11 @@ export interface DLPLogEntry {
     dlpHeader: string | null;
     blocked: boolean;
     timestamp: number;
+    // Cache fields
+    cacheStatus: string;
+    cacheTtl: number | null;
+    cacheKey: string | null;
+    skipCache: boolean;
 }
 
 /**
@@ -168,9 +173,14 @@ function buildDLPHeaderText(dlp: DLPResult): string {
 }
 
 /**
- * Build a log entry from a DLP result
+ * Build a log entry from a DLP result + cache status
  */
-export function buildLogEntry(userMessage: string, dlp: DLPResult | null): DLPLogEntry {
+export function buildLogEntry(
+    userMessage: string,
+    dlp: DLPResult | null,
+    cacheStatus: string,
+    cacheOptions?: { cacheTtl?: number; skipCache?: boolean; cacheKey?: string },
+): DLPLogEntry {
     return {
         userMessage,
         dlpAction: dlp?.action ?? "PASS",
@@ -179,6 +189,10 @@ export function buildLogEntry(userMessage: string, dlp: DLPResult | null): DLPLo
         dlpHeader: dlp ? buildDLPHeaderText(dlp) : "No DLP findings",
         blocked: dlp?.action === "BLOCK",
         timestamp: Date.now(),
+        cacheStatus,
+        cacheTtl: cacheOptions?.cacheTtl ?? null,
+        cacheKey: cacheOptions?.cacheKey ?? null,
+        skipCache: cacheOptions?.skipCache ?? false,
     };
 }
 
@@ -189,8 +203,8 @@ export function buildLogEntry(userMessage: string, dlp: DLPResult | null): DLPLo
 export async function logDLPEvent(db: D1Database, entry: DLPLogEntry): Promise<void> {
     await db.prepare(
         `INSERT INTO chat_dlp_logs 
-         (user_message, dlp_action, dlp_findings, dlp_check, blocked, timestamp, dlp_header) 
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
+         (user_message, dlp_action, dlp_findings, dlp_check, blocked, timestamp, dlp_header, cache_status, cache_ttl, cache_key, skip_cache) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
         entry.userMessage,
         entry.dlpAction,
@@ -199,6 +213,10 @@ export async function logDLPEvent(db: D1Database, entry: DLPLogEntry): Promise<v
         entry.blocked ? 1 : 0,
         entry.timestamp,
         entry.dlpHeader,
+        entry.cacheStatus,
+        entry.cacheTtl,
+        entry.cacheKey,
+        entry.skipCache ? 1 : 0,
     ).run();
 }
 

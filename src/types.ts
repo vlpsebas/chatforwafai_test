@@ -26,3 +26,12 @@ export interface ChatMessage {
     content: string;
 }
 
+/**
+ * Cache control options passed from the frontend per-request.
+ */
+export interface CacheOptions {
+    cacheTtl?: number;        // Cache TTL in seconds (min 60, max 2592000)
+    skipCache?: boolean;      // Bypass cache for this request
+    cacheKey?: string;        // Custom cache key (e.g., campaign-123)
+}
+
